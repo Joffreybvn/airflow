@@ -17,13 +17,29 @@
 """This module contains ODBC hook."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Iterable, Mapping, Callable, List
 from urllib.parse import quote_plus
 
 import pyodbc
 
 from airflow.providers.common.sql.hooks.sql import DbApiHook
 from airflow.utils.helpers import merge_dicts
+
+
+class MakeSerializableHandler:
+    def __init__(self, return_handler: Callable):
+        self.return_handler = return_handler
+
+    def __call__(self, cur):
+        result = self.return_handler(cur)
+        return self.make_serializable(result)
+
+    @staticmethod
+    def make_serializable(result: List[pyodbc.Row]) -> List[tuple]:
+        """Transform the pyodbc.Row objects returned from a SQL command into
+        JSON-serializable objects.
+        """
+        return [tuple(row) for row in result]
 
 
 class OdbcHook(DbApiHook):
@@ -211,3 +227,73 @@ class OdbcHook(DbApiHook):
         engine = self.get_sqlalchemy_engine(engine_kwargs=engine_kwargs)
         cnx = engine.connect(**(connect_kwargs or {}))
         return cnx
+
+    def run(
+        self,
+        sql: str | Iterable[str],
+        autocommit: bool = False,
+        parameters: Iterable | Mapping | None = None,
+        handler: Callable | None = None,
+        split_statements: bool = False,
+        return_last: bool = True,
+    ) -> Any | list[Any] | None:
+        """Run a command or a list of commands.
+
+        Pass a list of SQL statements to the sql parameter to get them to
+        execute sequentially.
+
+        The method will return either single query results (typically list of rows) or list of those results
+        where each element in the list are results of one of the queries (typically list of list of rows :D)
+
+        For compatibility reasons, the behaviour of the DBAPIHook is somewhat confusing.
+        In some cases, when multiple queries are run, the return value will be an iterable (list) of results
+        -- one for each query. However, in other cases, when single query is run, the return value will
+        be the result of that single query without wrapping the results in a list.
+
+        The cases when single query results are returned without wrapping them in a list are as follows:
+
+        a) sql is string and ``return_last`` is True (regardless what ``split_statements`` value is)
+        b) sql is string and ``split_statements`` is False
+
+        In all other cases, the results are wrapped in a list, even if there is only one statement to process.
+        In particular, the return value will be a list of query results in the following circumstances:
+
+        a) when ``sql`` is an iterable of string statements (regardless what ``return_last`` value is)
+        b) when ``sql`` is string, ``split_statements`` is True and ``return_last`` is False
+
+        After ``run`` is called, you may access the following properties on the hook object:
+
+        * ``descriptions``: an array of cursor descriptions. If ``return_last`` is True, this will be
+          a one-element array containing the cursor ``description`` for the last statement.
+          Otherwise, it will contain the cursor description for each statement executed.
+        * ``last_description``: the description for the last statement executed
+
+        Note that query result will ONLY be actually returned when a handler is provided; if
+        ``handler`` is None, this method will return None.
+
+        Handler is a way to process the rows from cursor (Iterator) into a value that is suitable to be
+        returned to XCom and generally fit in memory.
+
+        You can use pre-defined handles (``fetch_all_handler``, ``fetch_one_handler``) or implement your
+        own handler.
+
+        :param sql: the sql statement to be executed (str) or a list of
+            sql statements to execute
+        :param autocommit: What to set the connection's autocommit setting to
+            before executing the query.
+        :param parameters: The parameters to render the SQL query with.
+        :param handler: The result handler which is called with the result of each statement.
+        :param split_statements: Whether to split a single SQL string into statements and run separately
+        :param return_last: Whether to return result for only last statement or for all after split
+        :return: if handler provided, returns query results (may be list of results depending on params)
+        """
+        if handler is not None:
+            handler = MakeSerializableHandler(return_handler=handler)
+        return super().run(
+            sql=sql,
+            autocommit=autocommit,
+            parameters=parameters,
+            handler=handler,
+            split_statements=split_statements,
+            return_last=return_last,
+        )

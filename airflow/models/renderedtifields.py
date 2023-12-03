@@ -108,8 +108,8 @@ class RenderedTaskInstanceFields(Base):
         self.map_index = ti.map_index
         self.ti = ti
         if render_templates:
-            ti.render_templates()
-        self.task = ti.task
+            ti.render_templates_orm()
+        self.task = ti.orm_task
         if os.environ.get("AIRFLOW_IS_K8S_EXECUTOR_POD", None):
             # we can safely import it here from provider. In Airflow 2.7.0+ you need to have new version
             # of kubernetes provider installed to reach this place

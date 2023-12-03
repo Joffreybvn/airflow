@@ -741,10 +741,11 @@ class LazyXComAccess(collections.abc.Sequence):
 
     _query: Query
     _len: int | None = attr.ib(init=False, default=None)
+    _orm_deserialize_xcom: bool = attr.ib(init=True, default=False)
 
     @classmethod
-    def build_from_xcom_query(cls, query: Query) -> LazyXComAccess:
-        return cls(query=query.with_entities(XCom.value))
+    def build_from_xcom_query(cls, query: Query, orm_deserialize_xcom: bool = False) -> LazyXComAccess:
+        return cls(query=query.with_entities(XCom.value), orm_deserialize_xcom=orm_deserialize_xcom)
 
     def __repr__(self) -> str:
         return f"LazyXComAccess([{len(self)} items])"
@@ -792,10 +793,12 @@ class LazyXComAccess(collections.abc.Sequence):
             raise ValueError("only support index access for now")
         try:
             with self._get_bound_query() as query:
-                r = query.offset(key).limit(1).one()
+                result: XCom = query.offset(key).limit(1).one()
         except NoResultFound:
             raise IndexError(key) from None
-        return XCom.deserialize_value(r)
+        if self._orm_deserialize_xcom:
+            return result.orm_deserialize_value()
+        return XCom.deserialize_value(result)
 
     @contextlib.contextmanager
     def _get_bound_query(self) -> Generator[Query, None, None]:
@@ -870,6 +873,11 @@ def resolve_xcom_backend() -> type[BaseXCom]:
     if set(base_xcom_params) != set(xcom_params):
         _patch_outdated_serializer(clazz=clazz, params=xcom_params)
     return clazz
+
+
+def is_orm_deserialize_value_implemented() -> bool:
+    """Return True if a custom XCom backend overrides the `orm_deserialize_value` methods."""
+    return BaseXCom.orm_deserialize_value != resolve_xcom_backend().orm_deserialize_value
 
 
 if TYPE_CHECKING:

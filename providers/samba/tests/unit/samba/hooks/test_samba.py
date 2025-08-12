@@ -152,6 +152,8 @@ class TestSambaHook:
         [
             ("/start/path/with/slash", "//ip/share/start/path/with/slash"),
             ("start/path/without/slash", "//ip/share/start/path/without/slash"),
+            ("/start/path/with/windowslash","\\windowsSharer\windowsShare\windowsDirectory"),
+            ("start/path/without/windowslash","\\windowsSharer\windowsShare\windowsDirectory"),
         ],
     )
     @mock.patch(f"{BASEHOOK_PATCH_PATH}.get_connection")

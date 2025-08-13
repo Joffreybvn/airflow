@@ -17,11 +17,10 @@
 # under the License.
 from __future__ import annotations
 
-import posixpath
-import ntpath
 from functools import wraps
+from pathlib import PurePosixPath, PureWindowsPath
 from shutil import copyfileobj
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import smbclient
 
@@ -49,7 +48,7 @@ class SambaHook(BaseHook):
     conn_type = "samba"
     hook_name = "Samba"
 
-    def __init__(self, samba_conn_id: str = default_conn_name, share: str | None = None) -> None:
+    def __init__(self, samba_conn_id: str = default_conn_name, share: str | None = None, path_type: Literal["posix", "windows"] = None) -> None:
         super().__init__()
         conn = self.get_connection(samba_conn_id)
 
@@ -58,6 +57,11 @@ class SambaHook(BaseHook):
 
         if not conn.password:
             self.log.info("Password not provided")
+
+        self._path_type = path_type or conn.extra_dejson.get("path_type", "posix")
+        if self._path_type not in ("posix", "windows"):
+            self._path_type = "posix"
+            self.log.warning("Invalid path_type specified. It must be either 'posix' or 'windows'. Falling back to 'posix'")
 
         connection_cache: dict[str, smbprotocol.connection.Connection] = {}
 
@@ -85,10 +89,18 @@ class SambaHook(BaseHook):
             connection.disconnect()
         self._connection_cache.clear()
 
+    @staticmethod
+    def _join_posix_path(host: str, share: str, path: str) -> str:
+        return str(PurePosixPath("//" + host, share, path.lstrip('/')))
+
+    @staticmethod
+    def _join_windows_path(host: str, share: str, path: str) -> str:
+        return "\\" + str(PureWindowsPath(rf"\\{host}\\{share}", path.lstrip(r'\/')))
+
     def _join_path(self, path):
-        if smbclient._os.is_remote_path(path):
-            return ntpath.join(f"\\\\{self._host}", self._share, path.lstrip("\\"))
-        return f"//{posixpath.join(self._host, self._share, path.lstrip('/'))}"
+        if self._path_type == "windows":
+            return self._join_windows_path(self._host, self._share, path)
+        return self._join_posix_path(self._host, self._share, path)
 
     @wraps(smbclient.link)
     def link(self, src, dst, follow_symlinks=True):

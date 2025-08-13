@@ -315,6 +315,7 @@ class SambaHook(BaseHook):
     def get_ui_field_behaviour(cls) -> dict[str, Any]:
         """Return custom field behaviour."""
         return {
+            "hidden_fields": [],
             "relabeling": {"schema": "Share"},
         }
 

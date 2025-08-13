@@ -148,18 +148,18 @@ class TestSambaHook:
             assert dict(kwargs, **connection_settings) == p_kwargs
 
     @pytest.mark.parametrize(
-        "path, path_type, full_path",
+        "path, share_type, full_path",
         [
-            # Linux path -> Linux path, no path_type (default)
+            # Linux path -> Linux path, no share_type (default)
             ("/start/path/with/slash", None, "//ip/share/start/path/with/slash"),
             ("start/path/without/slash", None, "//ip/share/start/path/without/slash"),
-            # Linux path -> Linux path, explicit path_type (posix)
+            # Linux path -> Linux path, explicit share_type (posix)
             ("/start/path/with/slash/posix", "posix", "//ip/share/start/path/with/slash/posix"),
             ("start/path/without/slash/posix", "posix", "//ip/share/start/path/without/slash/posix"),
-            # Linux path -> Windows path, explicit path_type (windows)
+            # Linux path -> Windows path, explicit share_type (windows)
             ("/start/path/with/slash/windows", "windows", r"\\ip\share\start\path\with\slash\windows"),
             ("start/path/without/slash/windows", "windows", r"\\ip\share\start\path\without\slash\windows"),
-            # Windows path -> Windows path, explicit path_type (windows)
+            # Windows path -> Windows path, explicit share_type (windows)
             (
                 r"\start\path\with\backslash\windows",
                 "windows",
@@ -177,7 +177,7 @@ class TestSambaHook:
         self,
         get_conn_mock,
         path,
-        path_type,
+        share_type,
         full_path,
     ):
         CONNECTION = Connection(
@@ -188,7 +188,7 @@ class TestSambaHook:
         )
 
         get_conn_mock.return_value = CONNECTION
-        hook = SambaHook("samba_default", path_type=path_type)
+        hook = SambaHook("samba_default", share_type=share_type)
         assert hook._join_path(path) == full_path
 
     @mock.patch("airflow.providers.samba.hooks.samba.smbclient.open_file", return_value=mock.Mock())

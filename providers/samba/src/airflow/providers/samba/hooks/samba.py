@@ -48,7 +48,12 @@ class SambaHook(BaseHook):
     conn_type = "samba"
     hook_name = "Samba"
 
-    def __init__(self, samba_conn_id: str = default_conn_name, share: str | None = None, path_type: Literal["posix", "windows"] = None) -> None:
+    def __init__(
+        self,
+        samba_conn_id: str = default_conn_name,
+        share: str | None = None,
+        share_type: Literal["posix", "windows"] = None,
+    ) -> None:
         super().__init__()
         conn = self.get_connection(samba_conn_id)
 
@@ -58,10 +63,12 @@ class SambaHook(BaseHook):
         if not conn.password:
             self.log.info("Password not provided")
 
-        self._path_type = path_type or conn.extra_dejson.get("path_type", "posix")
-        if self._path_type not in ("posix", "windows"):
-            self._path_type = "posix"
-            self.log.warning("Invalid path_type specified. It must be either 'posix' or 'windows'. Falling back to 'posix'")
+        self._share_type = share_type or conn.extra_dejson.get("share_type", "posix")
+        if self._share_type not in ("posix", "windows"):
+            self._share_type = "posix"
+            self.log.warning(
+                "Invalid share_type specified. It must be either 'posix' or 'windows'. Falling back to 'posix'"
+            )
 
         connection_cache: dict[str, smbprotocol.connection.Connection] = {}
 
@@ -91,14 +98,14 @@ class SambaHook(BaseHook):
 
     @staticmethod
     def _join_posix_path(host: str, share: str, path: str) -> str:
-        return str(PurePosixPath("//" + host, share, path.lstrip('/')))
+        return str(PurePosixPath("//" + host, share, path.lstrip("/")))
 
     @staticmethod
     def _join_windows_path(host: str, share: str, path: str) -> str:
-        return "\\" + str(PureWindowsPath(rf"\\{host}\\{share}", path.lstrip(r'\/')))
+        return "\\" + str(PureWindowsPath(rf"\\{host}\\{share}", path.lstrip(r"\/")))
 
     def _join_path(self, path):
-        if self._path_type == "windows":
+        if self._share_type == "windows":
             return self._join_windows_path(self._host, self._share, path)
         return self._join_posix_path(self._host, self._share, path)
 
@@ -308,6 +315,19 @@ class SambaHook(BaseHook):
     def get_ui_field_behaviour(cls) -> dict[str, Any]:
         """Return custom field behaviour."""
         return {
-            "hidden_fields": ["extra"],
             "relabeling": {"schema": "Share"},
+        }
+
+    @classmethod
+    def get_connection_form_widgets(cls) -> dict[str, Any]:
+        """Return connection widgets to add to connection form."""
+        from flask_babel import lazy_gettext
+        from wtforms import StringField
+
+        return {
+            "share_type": StringField(
+                label=lazy_gettext("Share Type"),
+                description="The share OS type (`posix` or `windows`). Used to determine the formatting of file and folder paths.",
+                default="posix",
+            )
         }

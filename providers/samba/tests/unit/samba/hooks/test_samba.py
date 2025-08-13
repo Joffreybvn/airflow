@@ -160,12 +160,26 @@ class TestSambaHook:
             ("/start/path/with/slash/windows", "windows", r"\\ip\share\start\path\with\slash\windows"),
             ("start/path/without/slash/windows", "windows", r"\\ip\share\start\path\without\slash\windows"),
             # Windows path -> Windows path, explicit path_type (windows)
-            (r"\start\path\with\backslash\windows", "windows", r"\\ip\share\start\path\with\backslash\windows"),
-            (r"start\path\without\backslash\windows", "windows", r"\\ip\share\start\path\without\backslash\windows"),
+            (
+                r"\start\path\with\backslash\windows",
+                "windows",
+                r"\\ip\share\start\path\with\backslash\windows",
+            ),
+            (
+                r"start\path\without\backslash\windows",
+                "windows",
+                r"\\ip\share\start\path\without\backslash\windows",
+            ),
         ],
     )
     @mock.patch(f"{BASEHOOK_PATCH_PATH}.get_connection")
-    def test__join_path(self, get_conn_mock, path, path_type, full_path,):
+    def test__join_path(
+        self,
+        get_conn_mock,
+        path,
+        path_type,
+        full_path,
+    ):
         CONNECTION = Connection(
             host="ip",
             schema="share",
